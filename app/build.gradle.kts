@@ -22,7 +22,7 @@ fun getKeystoreProp(key: String, envKey: String): String? {
 
 android {
     namespace = "io.github.zyphoriate.hypercharge"
-    compileSdk = 34
+    compileSdk = 37
 
     // Auto-extract version from git tag in CI (refs/tags/v1.2.3 → 1.2.3)
     // Locally falls back to hardcoded defaults
