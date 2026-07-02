@@ -1,0 +1,33 @@
+[versions]
+agp = "8.7.3"
+kotlin = "2.0.21"
+compose-multiplatform = "1.7.3"
+compose-activity = "1.9.3"
+
+dexkit = "2.2.0"
+miuix = "0.9.2"
+libxposed-api = "101.0.0"
+
+[plugins]
+agp-app = { id = "com.android.application", version.ref = "agp" }
+kotlin = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+
+[libraries]
+# Compose
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-activity = { module = "androidx.activity:activity-compose", version.ref = "compose-activity" }
+
+# Xposed
+libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }
+
+# DexKit
+dexkit-android = { module = "org.luckypray:dexkit-android", version.ref = "dexkit" }
+
+# Miuix
+miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
+miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference", version.ref = "miuix" }
