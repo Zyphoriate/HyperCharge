@@ -88,13 +88,8 @@ object DexQueries {
                 name("onPreferenceClick")
                 paramCount(1)
                 returnType("boolean")
-                // References preference key strings
-                usingStrings(
-                    "cb_intellect_charge_protect",
-                    "charge_protect_value_setting"
-                )
             }
-        }.singleOrNull()
+        }.firstOrNull()
             ?: error("onPreferenceClick not found")
     }
 
