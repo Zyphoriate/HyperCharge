@@ -7,20 +7,10 @@ import io.github.zyphoriate.hypercharge.dexkit.DexQueries
 import io.github.zyphoriate.hypercharge.hook.ProtectFragmentHook
 import org.luckypray.dexkit.DexKitBridge
 
-/**
- * libxposed API 101 entry point for the main process.
- *
- * Uses DexKit to locate target classes/methods by structural characteristics,
- * eliminating reliance on hard-coded class name strings.
- *
- * @author qingyu
- */
 class MainModule : XposedModule() {
 
     companion object {
-        init {
-            System.loadLibrary("dexkit")
-        }
+        init { System.loadLibrary("dexkit") }
     }
 
     @SuppressLint("PrivateApi")
@@ -30,27 +20,23 @@ class MainModule : XposedModule() {
 
         val apkPath = param.applicationInfo.sourceDir
         val classLoader = param.defaultClassLoader
-
         val bridge = DexKitBridge.create(apkPath)
 
         try {
+            // DexKit: locate obfuscated class and hook-target methods
             val fragmentClassData = DexQueries.findChargeProtectFragment(bridge)
             val fragmentClass = fragmentClassData.getInstance(classLoader)
 
-            val onCreatePrefs = DexQueries.findOnCreatePreferencesMethod(bridge)
-            val onCreatePrefsMethod = onCreatePrefs.getMethodInstance(classLoader)
+            val onCreatePrefsMethod = DexQueries.findOnCreatePreferencesMethod(bridge)
+                .getMethodInstance(classLoader)
 
-            val onPreferenceClick = DexQueries.findOnPreferenceClickMethod(bridge)
-            val onPreferenceClickMethod = onPreferenceClick.getMethodInstance(classLoader)
+            val onPreferenceClickMethod = DexQueries.findOnPreferenceClickMethod(bridge)
+                .getMethodInstance(classLoader)
 
-            val getPreferenceScreen = DexQueries.findGetPreferenceScreenMethod(bridge)
-            val getPreferenceScreenMethod = getPreferenceScreen.getMethodInstance(classLoader)
-
-            val findPreference = DexQueries.findFindPreferenceMethod(bridge)
-            val findPreferenceMethod = findPreference.getMethodInstance(classLoader)
-
-            val requireContext = DexQueries.findRequireContextMethod(bridge)
-            val requireContextMethod = requireContext.getMethodInstance(classLoader)
+            // Standard framework methods — use simple reflection
+            val getPreferenceScreenMethod = fragmentClass.getMethod("getPreferenceScreen")
+            val findPreferenceMethod = fragmentClass.getMethod("findPreference", CharSequence::class.java)
+            val requireContextMethod = fragmentClass.getMethod("requireContext")
 
             ProtectFragmentHook.apply(
                 xposedInterface = this,
