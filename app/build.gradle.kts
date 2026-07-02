@@ -114,7 +114,7 @@ dependencies {
     compileOnly(libs.libxposed.api)
 
     // DexKit
-    implementation(libs.dexkit.android)
+    implementation(libs.dexkit)
 
     // Xiaomi charge API
     compileOnly(files("libs/mi_charge.jar"))
