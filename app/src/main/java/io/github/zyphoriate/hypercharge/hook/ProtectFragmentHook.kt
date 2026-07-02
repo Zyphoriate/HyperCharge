@@ -30,7 +30,7 @@ object ProtectFragmentHook {
     private var appContext: Context? = null
 
     fun apply(
-        base: XposedInterface,
+        xposedInterface: XposedInterface,
         onCreatePrefsMethod: Method,
         onPreferenceClickMethod: Method,
         getPreferenceScreenMethod: Method,
@@ -40,7 +40,7 @@ object ProtectFragmentHook {
         packageName: String,
     ) {
         // Hook onCreatePreferences: inject custom preference after original execution
-        base.hook(onCreatePrefsMethod).intercept(object : Hooker {
+        xposedInterface.hook(onCreatePrefsMethod).intercept(object : Hooker {
             override fun intercept(chain: XposedInterface.Chain): Any? {
                 val fragment = chain.thisObject
                 val args = chain.args
@@ -74,7 +74,7 @@ object ProtectFragmentHook {
         })
 
         // Hook onPreferenceClick: intercept clicks on our custom preference
-        base.hook(onPreferenceClickMethod).intercept(object : Hooker {
+        xposedInterface.hook(onPreferenceClickMethod).intercept(object : Hooker {
             override fun intercept(chain: XposedInterface.Chain): Any? {
                 val fragment = chain.thisObject
                 val preference = chain.args[0]

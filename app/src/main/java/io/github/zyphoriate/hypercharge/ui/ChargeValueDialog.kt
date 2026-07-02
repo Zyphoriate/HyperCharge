@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.zyphoriate.hypercharge.ui.theme.HyperSmartChargeTheme
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
+import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 

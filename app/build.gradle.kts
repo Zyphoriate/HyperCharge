@@ -102,6 +102,7 @@ androidComponents {
 
 dependencies {
     // Compose — provided via Compose Multiplatform plugin + manual essentials
+    implementation(libs.compose.material3)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.activity)
