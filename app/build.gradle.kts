@@ -19,26 +19,29 @@ fun getKeystoreProp(key: String, envKey: String): String? {
         ?: System.getenv(envKey)
 }
 
+// Auto-extract version from git tag in CI (refs/tags/v1.2.3 → 1.2.3)
+// Locally falls back to hardcoded defaults
+val ciVersionName: String
+val ciVersionCode: Int
+run {
+    val tagRef = System.getenv("GITHUB_REF") ?: ""
+    val versionFromTag = tagRef.removePrefix("refs/tags/v")
+    if (versionFromTag.isNotEmpty() && versionFromTag != tagRef) {
+        val parts = versionFromTag.split(".")
+        val major = parts.getOrElse(0) { "0" }.toIntOrNull() ?: 0
+        val minor = parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
+        val patch = parts.getOrElse(2) { "0" }.toIntOrNull() ?: 0
+        ciVersionName = versionFromTag
+        ciVersionCode = major * 10000 + minor * 100 + patch
+    } else {
+        ciVersionName = "2.0.0"
+        ciVersionCode = 10
+    }
+}
+
 android {
     namespace = "io.github.zyphoriate.hypercharge"
     compileSdk = 37
-
-    // Auto-extract version from git tag in CI (refs/tags/v1.2.3 → 1.2.3)
-    // Locally falls back to hardcoded defaults
-    val (ciVersionName, ciVersionCode) = run {
-        val tagRef = System.getenv("GITHUB_REF") ?: ""
-        val versionFromTag = tagRef.removePrefix("refs/tags/v")
-        if (versionFromTag.isNotEmpty() && versionFromTag != tagRef) {
-            val parts = versionFromTag.split(".")
-            val major = parts.getOrElse(0) { "0" }.toIntOrNull() ?: 0
-            val minor = parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
-            val patch = parts.getOrElse(2) { "0" }.toIntOrNull() ?: 0
-            val code = major * 10000 + minor * 100 + patch
-            versionFromTag to code
-        } else {
-            "2.0.0" to 10
-        }
-    }
 
     defaultConfig {
         minSdk = 28
@@ -85,15 +88,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+kotlin {
+    jvmToolchain(17)
+}
 
-    applicationVariants.all {
-        outputs.all {
-            val newApkName = "HyperSmartCharge-v2-${versionName}_${versionCode}.apk"
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = newApkName
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val name = "HyperSmartCharge-v2-${variant.versionName}_${variant.versionCode}.apk"
+            (output as? com.android.build.api.variant.impl.VariantOutputImpl)?.outputFileName = name
         }
     }
 }
