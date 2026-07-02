@@ -197,10 +197,17 @@ object ProtectFragmentHook {
 
     private fun isSmartChargeAvailable(fragment: Any, findPreferenceMethod: Method): Boolean {
         return try {
-            findPreferenceMethod.invoke(fragment, PREFERENCE_KEY_CATEGORY_PROTECT)?.let { category ->
-                findPreferenceMethod.invoke(category, PREFERENCE_KEY_INTELLECT_PROTECT)
-            } != null
-        } catch (_: Exception) { false }
+            val category = findPreferenceMethod.invoke(fragment, PREFERENCE_KEY_CATEGORY_PROTECT)
+            Log.d(TAG, "findPreference(category_features_battery_protect) = $category")
+            if (category == null) return false
+
+            val intellect = findPreferenceMethod.invoke(category, PREFERENCE_KEY_INTELLECT_PROTECT)
+            Log.d(TAG, "findPreference(cb_intellect_charge_protect) = $intellect")
+            intellect != null
+        } catch (e: Exception) {
+            Log.e(TAG, "isSmartChargeAvailable error", e)
+            false
+        }
     }
 
     @Suppress("DiscouragedApi")

@@ -35,7 +35,10 @@ class MainModule : XposedModule() {
 
             // Standard framework methods — use simple reflection
             val getPreferenceScreenMethod = fragmentClass.getMethod("getPreferenceScreen")
-            val findPreferenceMethod = fragmentClass.getMethod("findPreference", CharSequence::class.java)
+            val findPreferenceMethod = run {
+                try { fragmentClass.getMethod("findPreference", String::class.java) }
+                catch (_: NoSuchMethodException) { fragmentClass.getMethod("findPreference", CharSequence::class.java) }
+            }
             val requireContextMethod = fragmentClass.getMethod("requireContext")
 
             ProtectFragmentHook.apply(
