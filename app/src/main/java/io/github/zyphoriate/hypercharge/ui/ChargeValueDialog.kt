@@ -1,13 +1,14 @@
 package io.github.zyphoriate.hypercharge.ui
 
 import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import io.github.zyphoriate.hypercharge.ui.theme.HyperSmartChargeTheme
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -28,7 +30,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *
  * Slider range: 19..100
  *   - Position 0 → value 19 → "Close" (disable smart charge)
- *   - Position ≥1 → real percent values 20..100
+ *   - Position >=1 → real percent values 20..100
  *
  * @author qingyu
  */
@@ -38,13 +40,11 @@ fun ChargeValueDialogContent(
     onConfirm: (value: Int?) -> Unit,
     onCancel: () -> Unit,
 ) {
-    // Load existing value, default to "Close" position (19) if not set
     val existingValue = remember {
         ChargeProtectionUtils.getSmartChargePercentValue(context)?.toFloat() ?: MIN_SLIDER_VALUE
     }
     var sliderValue by mutableFloatStateOf(existingValue)
 
-    // Convert slider float value to display string
     val displayText: String
         get() {
             val intValue = sliderValue.roundToInt()
@@ -61,18 +61,17 @@ fun ChargeValueDialogContent(
                 .fillMaxWidth()
                 .padding(24.dp)
         ) {
-            // Current value display
-            Text(
+            BasicText(
                 text = displayText,
-                style = MiuixTheme.textStyles.title3,
-                color = MiuixTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
+                style = MiuixTheme.textStyles.title3.copy(
+                    color = MiuixTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Slider: 19 (Close) to 100
             Slider(
                 value = sliderValue,
                 onValueChange = { sliderValue = it },
@@ -83,41 +82,36 @@ fun ChargeValueDialogContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Note text
-            Text(
+            BasicText(
                 text = "The device will stop charging when battery reaches the custom value.",
-                style = MiuixTheme.textStyles.body2,
-                color = MiuixTheme.colorScheme.disabledOnSecondaryVariant,
+                style = MiuixTheme.textStyles.body2.copy(
+                    color = MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Action buttons
-            TextButton(
-                onClick = onCancel,
-                modifier = Modifier.align(Alignment.End)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                Text(text = "Cancel")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            TextButton(
-                onClick = {
-                    val intValue = sliderValue.roundToInt()
-                    val result = if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) {
-                        null // Close
-                    } else {
-                        intValue
-                    }
-                    onConfirm(result)
-                },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text(
+                Button(
+                    text = "Cancel",
+                    onClick = onCancel
+                )
+                Spacer(modifier = Modifier.padding(8.dp))
+                Button(
                     text = "OK",
-                    color = MiuixTheme.colorScheme.primary
+                    onClick = {
+                        val intValue = sliderValue.roundToInt()
+                        val result = if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) {
+                            null
+                        } else {
+                            intValue
+                        }
+                        onConfirm(result)
+                    }
                 )
             }
         }
