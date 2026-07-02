@@ -1,4 +1,3 @@
-import com.android.build.api.dsl.ApkSigningConfig
 import java.util.Properties
 
 plugins {
@@ -19,19 +18,6 @@ if (keystorePropertiesFile.exists()) {
 fun getKeystoreProp(key: String, envKey: String): String? {
     return keystoreProperties.getProperty(key)
         ?: System.getenv(envKey)
-}
-
-val releaseSigningCfg: ApkSigningConfig? = run {
-    val storeFile = getKeystoreProp("storeFile", "KEYSTORE_FILE")
-    if (!storeFile.isNullOrEmpty()) {
-        ApkSigningConfig("release").apply {
-            enableV3Signing = true
-            storeFile = rootProject.file(storeFile)
-            keyAlias = getKeystoreProp("keyAlias", "KEY_ALIAS") ?: ""
-            keyPassword = getKeystoreProp("keyPassword", "KEY_PASSWORD") ?: ""
-            storePassword = getKeystoreProp("storePassword", "STORE_PASSWORD") ?: ""
-        }
-    } else null
 }
 
 android {
@@ -63,13 +49,14 @@ android {
     }
 
     signingConfigs {
-        if (releaseSigningCfg != null) {
+        val ksFile = getKeystoreProp("storeFile", "KEYSTORE_FILE")
+        val ksAlias = getKeystoreProp("keyAlias", "KEY_ALIAS")
+        if (!ksFile.isNullOrEmpty() && !ksAlias.isNullOrEmpty()) {
             create("release") {
-                enableV3Signing = releaseSigningCfg!!.enableV3Signing
-                storeFile = releaseSigningCfg!!.storeFile
-                keyAlias = releaseSigningCfg!!.keyAlias
-                keyPassword = releaseSigningCfg!!.keyPassword
-                storePassword = releaseSigningCfg!!.storePassword
+                storeFile = rootProject.file(ksFile)
+                keyAlias = ksAlias
+                keyPassword = getKeystoreProp("keyPassword", "KEY_PASSWORD")
+                storePassword = getKeystoreProp("storePassword", "STORE_PASSWORD")
             }
         }
     }
