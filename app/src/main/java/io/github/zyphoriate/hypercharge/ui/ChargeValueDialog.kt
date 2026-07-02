@@ -14,26 +14,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.zyphoriate.hypercharge.ui.theme.HyperSmartChargeTheme
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Slider
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * Miuix Compose dialog content for setting the smart charge cutoff value.
- *
- * Slider range: 19..100
- *   - Position 0 → value 19 → "Close" (disable smart charge)
- *   - Position >=1 → real percent values 20..100
- *
- * @author qingyu
- */
+private const val MIN_SLIDER_VALUE = 19f
+private const val MAX_SLIDER_VALUE = 100f
+
 @Composable
 fun ChargeValueDialogContent(
     context: Context,
@@ -45,15 +38,7 @@ fun ChargeValueDialogContent(
     }
     var sliderValue by mutableFloatStateOf(existingValue)
 
-    val displayText: String
-        get() {
-            val intValue = sliderValue.roundToInt()
-            return if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) {
-                "Close"
-            } else {
-                "$intValue%"
-            }
-        }
+    val displayText = formatSliderValue(sliderValue)
 
     HyperSmartChargeTheme {
         Column(
@@ -96,12 +81,12 @@ fun ChargeValueDialogContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                Button(
+                TextButton(
                     text = "Cancel",
                     onClick = onCancel
                 )
                 Spacer(modifier = Modifier.padding(8.dp))
-                Button(
+                TextButton(
                     text = "OK",
                     onClick = {
                         val intValue = sliderValue.roundToInt()
@@ -118,5 +103,7 @@ fun ChargeValueDialogContent(
     }
 }
 
-private const val MIN_SLIDER_VALUE = 19f
-private const val MAX_SLIDER_VALUE = 100f
+private fun formatSliderValue(sliderValue: Float): String {
+    val intValue = sliderValue.roundToInt()
+    return if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) "Close" else "$intValue%"
+}
