@@ -27,10 +27,8 @@ object ProtectFragmentHook {
         onCreatePrefsMethod: Method,
         onPreferenceClickMethod: Method,
         getPreferenceScreenMethod: Method,
-        findPreferenceMethod: Method,
         requireContextMethod: Method,
-        fragmentClass: Class<*>,
-        packageName: String,
+        @Suppress("UNUSED_PARAMETER") packageName: String,
     ) {
         Log.i(TAG, "Hooking onCreatePreferences in $packageName")
 
@@ -45,12 +43,9 @@ object ProtectFragmentHook {
                 val ctx = appContext
                 if (ctx == null) {
                     Log.w(TAG, "Cannot get context from fragment")
-                } else if (isSmartChargeAvailable(fragment, findPreferenceMethod)) {
+                } else if (isSmartChargeAvailable(fragment)) {
                     Log.i(TAG, "Smart charge available — injecting custom preference")
-                    addSmartChargePreference(
-                        fragment, getPreferenceScreenMethod,
-                        findPreferenceMethod, requireContextMethod
-                    )
+                    addSmartChargePreference(fragment, getPreferenceScreenMethod, requireContextMethod)
                     if (BuildConfig.DEBUG) {
                         Toast.makeText(ctx, "HyperSmartCharge hooked OK", Toast.LENGTH_SHORT).show()
                     }
@@ -149,7 +144,6 @@ object ProtectFragmentHook {
     private fun addSmartChargePreference(
         fragment: Any,
         getPreferenceScreenMethod: Method,
-        findPreferenceMethod: Method,
         requireContextMethod: Method,
     ) {
         val context = requireContextMethod.invoke(fragment) as Context
@@ -195,19 +189,32 @@ object ProtectFragmentHook {
         }
     }
 
-    private fun isSmartChargeAvailable(fragment: Any, findPreferenceMethod: Method): Boolean {
+    private fun findPreference(who: Any, key: String): Any? {
         return try {
-            val category = findPreferenceMethod.invoke(fragment, PREFERENCE_KEY_CATEGORY_PROTECT)
-            Log.d(TAG, "findPreference(category_features_battery_protect) = $category")
-            if (category == null) return false
-
-            val intellect = findPreferenceMethod.invoke(category, PREFERENCE_KEY_INTELLECT_PROTECT)
-            Log.d(TAG, "findPreference(cb_intellect_charge_protect) = $intellect")
-            intellect != null
+            var method: Method? = null
+            var clazz: Class<*>? = who.javaClass
+            while (clazz != null && method == null) {
+                try { method = clazz.getDeclaredMethod("findPreference", String::class.java) }
+                catch (_: NoSuchMethodException) {
+                    try { method = clazz.getDeclaredMethod("findPreference", CharSequence::class.java) }
+                    catch (_: NoSuchMethodException) { clazz = clazz.superclass }
+                }
+            }
+            method?.invoke(who, key)
         } catch (e: Exception) {
-            Log.e(TAG, "isSmartChargeAvailable error", e)
-            false
+            Log.e(TAG, "findPreference error on ${who.javaClass.simpleName}", e)
+            null
         }
+    }
+
+    private fun isSmartChargeAvailable(fragment: Any): Boolean {
+        val category = findPreference(fragment, PREFERENCE_KEY_CATEGORY_PROTECT)
+        Log.d(TAG, "findPreference(category_features_battery_protect) = $category")
+        if (category == null) return false
+
+        val intellect = findPreference(category, PREFERENCE_KEY_INTELLECT_PROTECT)
+        Log.d(TAG, "findPreference(cb_intellect_charge_protect) = $intellect")
+        return intellect != null
     }
 
     @Suppress("DiscouragedApi")

@@ -33,12 +33,7 @@ class MainModule : XposedModule() {
             val onPreferenceClickMethod = DexQueries.findOnPreferenceClickMethod(bridge)
                 .getMethodInstance(classLoader)
 
-            // Standard framework methods — use simple reflection
             val getPreferenceScreenMethod = fragmentClass.getMethod("getPreferenceScreen")
-            val findPreferenceMethod = run {
-                try { fragmentClass.getMethod("findPreference", String::class.java) }
-                catch (_: NoSuchMethodException) { fragmentClass.getMethod("findPreference", CharSequence::class.java) }
-            }
             val requireContextMethod = fragmentClass.getMethod("requireContext")
 
             ProtectFragmentHook.apply(
@@ -46,9 +41,7 @@ class MainModule : XposedModule() {
                 onCreatePrefsMethod = onCreatePrefsMethod,
                 onPreferenceClickMethod = onPreferenceClickMethod,
                 getPreferenceScreenMethod = getPreferenceScreenMethod,
-                findPreferenceMethod = findPreferenceMethod,
                 requireContextMethod = requireContextMethod,
-                fragmentClass = fragmentClass,
                 packageName = param.packageName
             )
         } catch (e: Exception) {
