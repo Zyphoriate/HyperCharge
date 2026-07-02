@@ -1,12 +1,12 @@
-package cn.buffcow.hypersc.hook
+package io.github.zyphoriate.hypercharge.hook
 
 import android.app.AlertDialog
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.ui.platform.ComposeView
-import cn.buffcow.hypersc.ui.ChargeValueDialogContent
-import cn.buffcow.hypersc.utils.ChargeProtectionUtils
-import cn.buffcow.hypersc.utils.RemoteEventHelper
+import io.github.zyphoriate.hypercharge.ui.ChargeValueDialogContent
+import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
+import io.github.zyphoriate.hypercharge.utils.RemoteEventHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
 import java.lang.reflect.Method
@@ -235,7 +235,7 @@ object ProtectFragmentHook {
     @Suppress("DiscouragedApi")
     private fun getModuleString(context: Context, name: String, fallback: String): String {
         return try {
-            val resId = context.resources.getIdentifier(name, "string", "cn.buffcow.hypersc")
+            val resId = context.resources.getIdentifier(name, "string", "io.github.zyphoriate.hypercharge")
             if (resId != 0) context.resources.getString(resId) else fallback
         } catch (_: Exception) {
             fallback

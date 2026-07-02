@@ -1,8 +1,8 @@
-package cn.buffcow.hypersc.receiver
+package io.github.zyphoriate.hypercharge.receiver
 
 import android.annotation.SuppressLint
 import android.content.Context
-import cn.buffcow.hypersc.utils.ProtectNotificationHelper
+import io.github.zyphoriate.hypercharge.utils.ProtectNotificationHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModule

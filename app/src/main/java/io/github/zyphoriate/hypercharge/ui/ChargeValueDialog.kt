@@ -1,4 +1,4 @@
-package cn.buffcow.hypersc.ui
+package io.github.zyphoriate.hypercharge.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
@@ -17,8 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cn.buffcow.hypersc.ui.theme.HyperSmartChargeTheme
-import cn.buffcow.hypersc.utils.ChargeProtectionUtils
+import io.github.zyphoriate.hypercharge.ui.theme.HyperSmartChargeTheme
+import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 

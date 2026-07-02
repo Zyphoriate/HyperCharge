@@ -1,4 +1,4 @@
-package cn.buffcow.hypersc.dexkit
+package io.github.zyphoriate.hypercharge.dexkit
 
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.FindClass

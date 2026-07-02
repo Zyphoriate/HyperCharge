@@ -1,9 +1,9 @@
-package cn.buffcow.hypersc
+package io.github.zyphoriate.hypercharge
 
 import android.annotation.SuppressLint
-import cn.buffcow.hypersc.dexkit.DexQueries
-import cn.buffcow.hypersc.hook.ProtectFragmentHook
-import cn.buffcow.hypersc.utils.RemoteEventHelper
+import io.github.zyphoriate.hypercharge.dexkit.DexQueries
+import io.github.zyphoriate.hypercharge.hook.ProtectFragmentHook
+import io.github.zyphoriate.hypercharge.utils.RemoteEventHelper
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModule

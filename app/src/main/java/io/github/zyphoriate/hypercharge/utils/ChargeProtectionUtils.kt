@@ -1,4 +1,4 @@
-package cn.buffcow.hypersc.utils
+package io.github.zyphoriate.hypercharge.utils
 
 import android.content.Context
 import android.provider.Settings

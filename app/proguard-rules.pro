@@ -9,5 +9,5 @@
 -keep class org.luckypray.dexkit.** { *; }
 
 # Keep the module entry
--keep class cn.buffcow.hypersc.MainModule { *; }
--keep class cn.buffcow.hypersc.receiver.ModuleReceiver { *; }
+-keep class io.github.zyphoriate.hypercharge.MainModule { *; }
+-keep class io.github.zyphoriate.hypercharge.receiver.ModuleReceiver { *; }

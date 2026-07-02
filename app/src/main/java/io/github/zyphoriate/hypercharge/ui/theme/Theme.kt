@@ -1,4 +1,4 @@
-package cn.buffcow.hypersc.ui.theme
+package io.github.zyphoriate.hypercharge.ui.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember

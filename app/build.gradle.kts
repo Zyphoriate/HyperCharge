@@ -35,7 +35,7 @@ val releaseSigningCfg: ApkSigningConfig? = run {
 }
 
 android {
-    namespace = "cn.buffcow.hypersc"
+    namespace = "io.github.zyphoriate.hypercharge"
     compileSdk = 34
 
     // Auto-extract version from git tag in CI (refs/tags/v1.2.3 → 1.2.3)
