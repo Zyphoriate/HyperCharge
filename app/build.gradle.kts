@@ -20,24 +20,21 @@ fun getKeystoreProp(key: String, envKey: String): String? {
 }
 
 // Auto-extract version from git tag in CI (refs/tags/v1.2.3 → 1.2.3)
-// Locally falls back to hardcoded defaults
-val ciVersionName: String
-val ciVersionCode: Int
-run {
+val ciVersion = run {
     val tagRef = System.getenv("GITHUB_REF") ?: ""
-    val versionFromTag = tagRef.removePrefix("refs/tags/v")
-    if (versionFromTag.isNotEmpty() && versionFromTag != tagRef) {
-        val parts = versionFromTag.split(".")
+    val ver = tagRef.removePrefix("refs/tags/v")
+    if (ver.isNotEmpty() && ver != tagRef) {
+        val parts = ver.split(".")
         val major = parts.getOrElse(0) { "0" }.toIntOrNull() ?: 0
         val minor = parts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
         val patch = parts.getOrElse(2) { "0" }.toIntOrNull() ?: 0
-        ciVersionName = versionFromTag
-        ciVersionCode = major * 10000 + minor * 100 + patch
+        ver to (major * 10000 + minor * 100 + patch)
     } else {
-        ciVersionName = "2.0.0"
-        ciVersionCode = 10
+        "2.0.0" to 10
     }
 }
+val ciVersionName = ciVersion.first
+val ciVersionCode = ciVersion.second
 
 android {
     namespace = "io.github.zyphoriate.hypercharge"
@@ -97,8 +94,8 @@ kotlin {
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
-            val name = "HyperSmartCharge-v2-${variant.versionName}_${variant.versionCode}.apk"
-            (output as? com.android.build.api.variant.impl.VariantOutputImpl)?.outputFileName = name
+            val apkName = "HyperSmartCharge-v2-${ciVersionName}_${ciVersionCode}.apk"
+            output.outputFileName.set(apkName)
         }
     }
 }
