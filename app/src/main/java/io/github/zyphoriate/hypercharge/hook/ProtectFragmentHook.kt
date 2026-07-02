@@ -2,8 +2,10 @@ package io.github.zyphoriate.hypercharge.hook
 
 import android.app.AlertDialog
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.ui.platform.ComposeView
+import io.github.zyphoriate.hypercharge.BuildConfig
 import io.github.zyphoriate.hypercharge.ui.ChargeValueDialogContent
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import io.github.zyphoriate.hypercharge.utils.RemoteEventHelper
@@ -11,18 +13,9 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
 import java.lang.reflect.Method
 
-/**
- * Hook logic for ChargeProtectFragment in MIUI Security Center.
- *
- * Uses libxposed API 101 interceptor-chain pattern:
- *   chain.proceed() → original method executes
- *   code after proceed() → "after" hook behavior
- *   code before proceed() → "before" hook behavior
- *
- * @author qingyu
- */
 object ProtectFragmentHook {
 
+    private const val TAG = "HyperSmartCharge"
     private const val PREFERENCE_KEY_INTELLECT_PROTECT = "cb_intellect_charge_protect"
     private const val PREFERENCE_KEY_CATEGORY_PROTECT = "category_features_battery_protect"
     private const val PREFERENCE_KEY_SMART_CHARGE_VALUE_SET = "charge_protect_value_setting"
@@ -39,65 +32,69 @@ object ProtectFragmentHook {
         fragmentClass: Class<*>,
         packageName: String,
     ) {
-        // Hook onCreatePreferences: inject custom preference after original execution
+        Log.i(TAG, "Hooking onCreatePreferences in $packageName")
+
         xposedInterface.hook(onCreatePrefsMethod).intercept(object : Hooker {
             override fun intercept(chain: XposedInterface.Chain): Any? {
                 val fragment = chain.thisObject
-                val args = chain.args
+                Log.d(TAG, "onCreatePreferences intercepted, fragment=$fragment")
 
-                // Execute original onCreatePreferences first
                 val result = chain.proceed()
 
                 try {
                     appContext = requireContextMethod.invoke(fragment) as? Context
+                    val ctx = appContext ?: return@try result
 
                     if (isSmartChargeAvailable(fragment, findPreferenceMethod)) {
-                        // Add our custom preference to the existing screen
+                        Log.i(TAG, "Smart charge available — injecting custom preference")
                         addSmartChargePreference(
                             fragment = fragment,
                             getPreferenceScreenMethod = getPreferenceScreenMethod,
                             findPreferenceMethod = findPreferenceMethod,
                             requireContextMethod = requireContextMethod,
                         )
-                    } else {
-                        // Smart charge not available — tell remote process to cancel
-                        appContext?.let { ctx ->
-                            RemoteEventHelper.sendEvent(ctx, RemoteEventHelper.Event.UnregisterBatteryReceiver)
+                        if (BuildConfig.DEBUG) {
+                            Toast.makeText(ctx, "HyperSmartCharge hooked OK", Toast.LENGTH_SHORT).show()
                         }
+                    } else {
+                        Log.w(TAG, "Smart charge not available — sending unregister event")
+                        RemoteEventHelper.sendEvent(ctx, RemoteEventHelper.Event.UnregisterBatteryReceiver)
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("HyperSmartCharge", "onCreatePreferences hook error", e)
+                    Log.e(TAG, "onCreatePreferences hook error", e)
                 }
 
                 return result
             }
         })
 
-        // Hook onPreferenceClick: intercept clicks on our custom preference
+        Log.i(TAG, "Hooking onPreferenceClick")
         xposedInterface.hook(onPreferenceClickMethod).intercept(object : Hooker {
             override fun intercept(chain: XposedInterface.Chain): Any? {
-                val fragment = chain.thisObject
                 val preference = chain.args[0]
+                Log.d(TAG, "onPreferenceClick intercepted, preference=$preference")
 
                 try {
-                    // Check if the clicked preference is ours
                     val prefKey = preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String
+                    Log.d(TAG, "Clicked preference key: $prefKey")
 
                     if (prefKey == PREFERENCE_KEY_SMART_CHARGE_VALUE_SET) {
-                        val context = appContext ?: requireContextMethod.invoke(fragment) as? Context
+                        val context = appContext ?: requireContextMethod.invoke(chain.thisObject) as? Context
                         context?.let { ctx ->
+                            Log.i(TAG, "Opening charge value dialog")
                             showChargeValueDialog(ctx, preference)
                         }
-                        return true // handled
+                        return true
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("HyperSmartCharge", "onPreferenceClick hook error", e)
+                    Log.e(TAG, "onPreferenceClick hook error", e)
                 }
 
-                // Not our preference — proceed with original handler
                 return chain.proceed()
             }
         })
+
+        Log.i(TAG, "HyperSmartCharge hooks installed successfully")
     }
 
     /**
@@ -105,8 +102,10 @@ object ProtectFragmentHook {
      */
     private fun showChargeValueDialog(context: Context, preference: Any) {
         val composeView = ComposeView(context)
+        Log.d(TAG, "Creating charge value dialog")
 
         val dialog = AlertDialog.Builder(context)
+            .setTitle("HyperSmartCharge")
             .setView(composeView)
             .setNegativeButton(android.R.string.cancel) { d, _ -> d.dismiss() }
             .create()

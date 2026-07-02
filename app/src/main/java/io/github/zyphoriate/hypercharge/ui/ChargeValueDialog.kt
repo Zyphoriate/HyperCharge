@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,7 +40,8 @@ fun ChargeValueDialogContent(
     }
     var sliderValue by mutableFloatStateOf(existingValue)
 
-    val displayText = formatSliderValue(sliderValue)
+    // Reactively derive display text from slider value
+    val displayText by remember { derivedStateOf { formatSliderValue(sliderValue) } }
 
     HyperSmartChargeTheme {
         Column(
@@ -46,17 +49,21 @@ fun ChargeValueDialogContent(
                 .fillMaxWidth()
                 .padding(24.dp)
         ) {
+            // Value display — updates reactively as slider moves
             BasicText(
                 text = displayText,
                 style = MiuixTheme.textStyles.title3.copy(
                     color = MiuixTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.CenterHorizontally)
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Slider: 19 (Close) to 100
             Slider(
                 value = sliderValue,
                 onValueChange = { sliderValue = it },
@@ -67,8 +74,9 @@ fun ChargeValueDialogContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Note
             BasicText(
-                text = "The device will stop charging when battery reaches the custom value.",
+                text = "Device stops charging when battery reaches the set value.",
                 style = MiuixTheme.textStyles.body2.copy(
                     color = MiuixTheme.colorScheme.disabledOnSecondaryVariant
                 ),
@@ -77,24 +85,19 @@ fun ChargeValueDialogContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(
-                    text = "Cancel",
-                    onClick = onCancel
-                )
+                TextButton(text = "Cancel", onClick = onCancel)
                 Spacer(modifier = Modifier.padding(8.dp))
                 TextButton(
                     text = "OK",
                     onClick = {
                         val intValue = sliderValue.roundToInt()
-                        val result = if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) {
-                            null
-                        } else {
-                            intValue
-                        }
+                        val result = if (intValue < ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE) null
+                        else intValue
                         onConfirm(result)
                     }
                 )
