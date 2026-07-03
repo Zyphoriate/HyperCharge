@@ -1,14 +1,9 @@
 package io.github.zyphoriate.hypercharge.hook
 
-import android.app.AlertDialog
 import android.content.Context
 import android.util.Log
-import android.widget.LinearLayout
-import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import io.github.libxposed.api.XposedInterface
-import io.github.libxposed.api.XposedInterface.Hooker
 import io.github.zyphoriate.hypercharge.BuildConfig
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import io.github.zyphoriate.hypercharge.utils.RemoteEventHelper
@@ -36,7 +31,6 @@ object ProtectFragmentHook {
         xposedInterface.hook(onCreatePrefsMethod).intercept { chain ->
             val fragment = chain.thisObject
             Log.d(TAG, "onCreatePreferences intercepted, fragment=$fragment")
-
             val result = chain.proceed()
 
             try {
@@ -70,13 +64,9 @@ object ProtectFragmentHook {
             try {
                 val prefKey = preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String
                 Log.d(TAG, "Clicked preference key: $prefKey")
-
                 if (prefKey == PREFERENCE_KEY_SMART_CHARGE_VALUE_SET) {
                     val ctx = appContext ?: requireContextMethod.invoke(fragment) as? Context
-                    if (ctx != null) {
-                        Log.i(TAG, "Opening charge value dialog")
-                        showChargeValueDialog(ctx, preference)
-                    }
+                    if (ctx != null) launchSettingsActivity(ctx)
                     return@intercept true
                 }
             } catch (e: Exception) {
@@ -89,88 +79,30 @@ object ProtectFragmentHook {
         Log.i(TAG, "HyperSmartCharge hooks installed successfully")
     }
 
-    private fun showChargeValueDialog(context: Context, preference: Any) {
-        Log.d(TAG, "Creating charge value dialog")
-
-        val layout = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 24, 48, 24)
-        }
-
-        val valueText = TextView(context).apply {
-            textSize = 20f
-            text = getSmartChargeValueText(context)
-        }
-        layout.addView(valueText)
-
-        val seekBar = SeekBar(context).apply {
-            max = MAX_CHARGE_PERCENT_VALUE - MIN_CHARGE_PERCENT_VALUE
-            val existing = ChargeProtectionUtils.getSmartChargePercentValue(context)
-            progress = if (existing != null && existing >= MIN_CHARGE_PERCENT_VALUE) {
-                existing - MIN_CHARGE_PERCENT_VALUE
-            } else 0
-
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val pv = progress + MIN_CHARGE_PERCENT_VALUE
-                    valueText.text = if (progress == 0) "Close" else "$pv%"
+    private fun launchSettingsActivity(context: Context) {
+        Log.d(TAG, "Launching SettingsActivity")
+        try {
+            context.startActivity(
+                android.content.Intent().apply {
+                    setClassName(
+                        "io.github.zyphoriate.hypercharge",
+                        "io.github.zyphoriate.hypercharge.ui.SettingsActivity"
+                    )
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                override fun onStartTrackingTouch(sb: SeekBar?) {}
-                override fun onStopTrackingTouch(sb: SeekBar?) {}
-            })
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch SettingsActivity", e)
+            Toast.makeText(context, "Launch failed", Toast.LENGTH_SHORT).show()
         }
-        layout.addView(seekBar)
-
-        AlertDialog.Builder(context)
-            .setTitle("HyperSmartCharge")
-            .setView(layout)
-            .setNegativeButton(android.R.string.cancel) { d, _ -> d.dismiss() }
-            .setPositiveButton(android.R.string.ok) { d, _ ->
-                val progress = seekBar.progress
-                val percentValue = if (progress == 0) null
-                else progress + MIN_CHARGE_PERCENT_VALUE
-
-                val success = if (percentValue != null) {
-                    ChargeProtectionUtils.openCommonProtectMode(percentValue)
-                } else {
-                    ChargeProtectionUtils.closeSmartCharge()
-                }
-
-                ChargeProtectionUtils.putSmartChargePercentValue(context, percentValue)
-
-                try {
-                    val text = getSmartChargeValueText(context, percentValue)
-                    preference.javaClass.getMethod("setText", String::class.java)
-                        .invoke(preference, text)
-                } catch (_: Exception) {}
-
-                val notifValue = if (success) percentValue?.toString() else null
-                RemoteEventHelper.sendEvent(
-                    context,
-                    RemoteEventHelper.Event.UpdateNotification(notifValue)
-                )
-
-                val msg = if (success) {
-                    if (percentValue != null) "$percentValue%" else "Closed"
-                } else "Failed"
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                Log.i(TAG, "Charge value set: $msg")
-
-                d.dismiss()
-            }
-            .create()
-            .show()
     }
-
-    private val MIN_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE
-    private val MAX_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MAX_CHARGE_PERCENT_VALUE
 
     private fun addSmartChargePreference(
         fragment: Any,
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
     ) {
-        val cl = fragment.javaClass.classLoader // Fragment's CL can resolve all AndroidX/miuix deps
+        val cl = fragment.javaClass.classLoader
         val context = requireContextMethod.invoke(fragment) as Context
         val preferenceScreen = getPreferenceScreenMethod.invoke(fragment)
 
@@ -179,14 +111,12 @@ object ProtectFragmentHook {
         val category = catConstructor.newInstance(context, null)
 
         val prefBaseClass = cl.loadClass("androidx.preference.Preference")
-        preferenceScreen.javaClass.getMethod("addPreference", prefBaseClass)
-            .invoke(preferenceScreen, category)
+        preferenceScreen.javaClass.getMethod("addPreference", prefBaseClass).invoke(preferenceScreen, category)
 
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        // Set fragment as OnPreferenceClickListener — hook on onPreferenceClick handles the dialog
         val setListenerMethod = textPrefClass.methods.find {
             it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1
         }
@@ -209,11 +139,8 @@ object ProtectFragmentHook {
 
     private fun getSmartChargeValueText(context: Context, value: Int? = null): String {
         val percent = value ?: ChargeProtectionUtils.getSmartChargePercentValue(context)
-        return if (percent != null && ChargeProtectionUtils.isSmartChargePercentValueValid(percent)) {
-            "$percent%"
-        } else {
-            getModuleString(context, "smart_charge_close", "Close")
-        }
+        return if (percent != null && ChargeProtectionUtils.isSmartChargePercentValueValid(percent)) "$percent%"
+        else getModuleString(context, "smart_charge_close", "Close")
     }
 
     private fun findPreference(who: Any, key: String): Any? {
@@ -238,7 +165,6 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREFERENCE_KEY_CATEGORY_PROTECT)
         Log.d(TAG, "findPreference(category_features_battery_protect) = $category")
         if (category == null) return false
-
         val intellect = findPreference(category, PREFERENCE_KEY_INTELLECT_PROTECT)
         Log.d(TAG, "findPreference(cb_intellect_charge_protect) = $intellect")
         return intellect != null
