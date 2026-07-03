@@ -90,33 +90,8 @@ object ProtectFragmentHook {
         val checkBoxClass = cl.loadClass("miuix.preference.CheckBoxPreference")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
-        // Hook setChecked BEFORE setting initial state
-        xposedInterface.hook(
-            checkBoxClass.getMethod("setChecked", Boolean::class.java)
-        ).intercept { chain ->
-            // Only intercept our own checkbox
-            val pref = chain.thisObject
-            val key = try { checkBoxClass.getMethod("getKey").invoke(pref) as? String } catch (_: Exception) { null }
-            if (key != PREF_KEY_CUTOFF_CHECK) return@intercept chain.proceed()
-
-            val newValue = chain.args[0] as Boolean
-            if (newValue) {
-                val cur = ChargeProtectionUtils.getSmartChargePercentValue(context)
-                if (cur == null) {
-                    ChargeProtectionUtils.openCommonProtectMode(70)
-                    ChargeProtectionUtils.putSmartChargePercentValue(context, 70)
-                }
-            }
-            val result = chain.proceed()
-            try {
-                textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(settingButton, newValue)
-                textPrefClass.getMethod("setText", String::class.java)
-                    .invoke(settingButton, getSmartChargeValueText(context))
-            } catch (_: Exception) {}
-            result
-        }
-
         val hasValue = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
+
         val checkBox = checkBoxClass.getConstructor(Context::class.java).newInstance(context).apply {
             checkBoxClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
             checkBoxClass.getMethod("setTitle", CharSequence::class.java)
@@ -142,6 +117,31 @@ object ProtectFragmentHook {
             textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasValue)
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
+
+        // Hook setChecked to toggle setting button visibility
+        xposedInterface.hook(
+            checkBoxClass.getMethod("setChecked", Boolean::class.java)
+        ).intercept { chain ->
+            val key = try { checkBoxClass.getMethod("getKey").invoke(chain.thisObject) as? String }
+                catch (_: Exception) { null }
+            if (key != PREF_KEY_CUTOFF_CHECK) return@intercept chain.proceed()
+
+            val newValue = chain.args[0] as Boolean
+            if (newValue) {
+                val cur = ChargeProtectionUtils.getSmartChargePercentValue(context)
+                if (cur == null) {
+                    ChargeProtectionUtils.openCommonProtectMode(70)
+                    ChargeProtectionUtils.putSmartChargePercentValue(context, 70)
+                }
+            }
+            val result = chain.proceed()
+            try {
+                textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(settingButton, newValue)
+                textPrefClass.getMethod("setText", String::class.java)
+                    .invoke(settingButton, getSmartChargeValueText(context))
+            } catch (_: Exception) {}
+            result
+        }
 
         Log.i(TAG, "Cutoff checkbox + settings button injected")
     }
