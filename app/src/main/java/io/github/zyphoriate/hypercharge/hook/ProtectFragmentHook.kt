@@ -19,6 +19,8 @@ object ProtectFragmentHook {
 
     private var appContext: Context? = null
     private lateinit var xposedInterface: XposedInterface
+    private var settingButton: Any? = null  // The "Cutoff Value" TextPreference
+    private var textPrefClass: Class<*>? = null
 
     fun apply(
         xposedInterface: XposedInterface,
@@ -54,16 +56,40 @@ object ProtectFragmentHook {
             result
         }
 
-        // Hook onPreferenceClick: intercept clicks on our settings button
+        // Hook onPreferenceClick: handle radio selection AND settings button click
         xposedInterface.hook(onPreferenceClickMethod).intercept { chain ->
             val fragment = chain.thisObject
             val preference = chain.args[0]
             try {
                 val prefKey = preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String
-                if (prefKey == PREF_KEY_CUTOFF_SETTING) {
-                    val ctx = appContext ?: requireContextMethod.invoke(fragment) as? Context
-                    if (ctx != null) launchSettingsActivity(ctx)
-                    return@intercept true
+                Log.d(TAG, "onPreferenceClick key: $prefKey")
+
+                when (prefKey) {
+                    PREF_KEY_CUTOFF_SETTING -> {
+                        // Settings button clicked → launch miuix Activity
+                        val ctx = appContext ?: requireContextMethod.invoke(fragment) as? Context
+                        if (ctx != null) launchSettingsActivity(ctx)
+                        return@intercept true
+                    }
+                    PREF_KEY_CUTOFF_CHECK -> {
+                        // "断冲" radio selected → show settings button + set default value
+                        val ctx = appContext ?: return@intercept chain.proceed()
+                        val cur = ChargeProtectionUtils.getSmartChargePercentValue(ctx)
+                        if (cur == null) {
+                            ChargeProtectionUtils.openCommonProtectMode(70)
+                            ChargeProtectionUtils.putSmartChargePercentValue(ctx, 70)
+                        }
+                        showSettingButton(true, ctx)
+                        return@intercept true
+                    }
+                    // Another radio was selected (智慧充电保护 / 正常满充) → hide button
+                    PREF_KEY_INTELLECT -> {
+                        val ctx = appContext ?: return@intercept chain.proceed()
+                        ChargeProtectionUtils.closeSmartCharge()
+                        RemoteEventHelper.sendEvent(ctx, RemoteEventHelper.Event.UnregisterBatteryReceiver)
+                        showSettingButton(false, ctx)
+                        // Pass through to original handler
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "onPreferenceClick hook error", e)
@@ -86,12 +112,9 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
         val prefBaseClass = cl.loadClass("androidx.preference.Preference")
 
-        // 1. Add "断冲" — use the same class as the existing preferences
-        // Find an existing preference to get its actual runtime class
+        // 1. Add "断冲" — use the same class as existing preferences
         val existingPref = findPreference(category, PREF_KEY_INTELLECT)
-        val radioClass = existingPref!!.javaClass  // Must exist (we already checked)
-        Log.d(TAG, "Existing preference class: ${radioClass.name}")
-        val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
+        val radioClass = existingPref!!.javaClass
 
         val hasCutoffSet = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
 
@@ -105,70 +128,54 @@ object ProtectFragmentHook {
         // If cutoff was previously set, switch selection to our radio
         if (hasCutoffSet) {
             try {
-                // Uncheck the currently checked item
                 val getPreferenceCount = category.javaClass.getMethod("getPreferenceCount")
                 val getPreference = category.javaClass.getMethod("getPreference", Int::class.java)
                 val count = getPreferenceCount.invoke(category) as Int
                 for (i in 0 until count) {
                     val pref = getPreference.invoke(category, i)
-                    val isChecked = radioClass.getMethod("isChecked").invoke(pref) as? Boolean ?: false
-                    if (isChecked) {
+                    val checked = radioClass.getMethod("isChecked").invoke(pref) as? Boolean ?: false
+                    if (checked) {
                         radioClass.getMethod("setChecked", Boolean::class.java).invoke(pref, false)
                         break
                     }
                 }
-                // Check our radio
                 radioClass.getMethod("setChecked", Boolean::class.java).invoke(radioPref, true)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to switch selection to cutoff radio", e)
             }
         }
 
-        // 2. Add clickable setting button (shown when cutoff is enabled)
-        val settingButton = textPrefClass.getConstructor(Context::class.java).newInstance(context).apply {
-            val lm = textPrefClass.methods.find {
+        // 2. Add "断冲值" settings button
+        val tpc = cl.loadClass("miuix.preference.TextPreference").also { textPrefClass = it }
+        val btn = tpc.getConstructor(Context::class.java).newInstance(context).apply {
+            val lm = tpc.methods.find {
                 it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1
             }
             lm?.invoke(this, fragment)
-            textPrefClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_SETTING)
-            textPrefClass.getMethod("setTitle", CharSequence::class.java)
+            tpc.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_SETTING)
+            tpc.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_value_title", "Cutoff Value"))
-            textPrefClass.getMethod("setSummary", CharSequence::class.java)
+            tpc.getMethod("setSummary", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_value_summary", "Tap to set the charge limit"))
-            textPrefClass.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
-            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoffSet)
+            tpc.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
+            tpc.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoffSet)
         }
-        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
+        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, btn)
+        settingButton = btn
 
-        // Hook setChecked to toggle setting button + charge mode
-        xposedInterface.hook(
-            radioClass.getMethod("setChecked", Boolean::class.java)
-        ).intercept { chain ->
-            val key = try { radioClass.getMethod("getKey").invoke(chain.thisObject) as? String }
-                catch (_: Exception) { null }
-            if (key != PREF_KEY_CUTOFF_CHECK) return@intercept chain.proceed()
+        Log.i(TAG, "Cutoff radio + settings button injected, hasCutoffSet=$hasCutoffSet")
+    }
 
-            val newValue = chain.args[0] as Boolean
-            if (newValue) {
-                val cur = ChargeProtectionUtils.getSmartChargePercentValue(context)
-                if (cur == null) {
-                    ChargeProtectionUtils.openCommonProtectMode(70)
-                    ChargeProtectionUtils.putSmartChargePercentValue(context, 70)
-                }
-            } else {
-                ChargeProtectionUtils.closeSmartCharge()
-                RemoteEventHelper.sendEvent(context, RemoteEventHelper.Event.UnregisterBatteryReceiver)
+    private fun showSettingButton(visible: Boolean, context: Context) {
+        val btn = settingButton ?: return
+        val tpc = textPrefClass ?: return
+        try {
+            tpc.getMethod("setVisible", Boolean::class.java).invoke(btn, visible)
+            if (visible) {
+                tpc.getMethod("setText", String::class.java)
+                    .invoke(btn, getSmartChargeValueText(context))
             }
-            val result = chain.proceed()
-            try {
-                textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(settingButton, newValue)
-                textPrefClass.getMethod("setText", String::class.java)
-                    .invoke(settingButton, getSmartChargeValueText(context))
-            } catch (_: Exception) {}
-            result
-        }
-
-        Log.i(TAG, "Cutoff checkbox + settings button injected")
+        } catch (_: Exception) {}
     }
 
     private fun launchSettingsActivity(context: Context) {
