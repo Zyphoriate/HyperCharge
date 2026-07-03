@@ -162,8 +162,24 @@ object ProtectFragmentHook {
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        val setListenerMethod = textPrefClass.methods.first { it.name == "setOnPreferenceClickListener" }
-        setListenerMethod.invoke(textPref, fragment)
+        // Set click listener — use Preference.OnPreferenceClickListener proxy
+        val prefClickListenerClass = try {
+            cl.loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
+        } catch (_: ClassNotFoundException) {
+            cl.loadClass("androidx.preference.Preference$OnPreferenceClickListener")
+        }
+        val clickProxy = java.lang.reflect.Proxy.newProxyInstance(
+            cl, arrayOf(prefClickListenerClass)
+        ) { _, method, args ->
+            if (method.name == "onPreferenceClick" && args != null && args.size == 1) {
+                Log.d(TAG, "Preference clicked via proxy: ${args[0]}")
+                showChargeValueDialog(context, textPref)
+                true
+            } else false
+        }
+        textPrefClass.getMethod("setOnPreferenceClickListener", prefClickListenerClass)
+            .invoke(textPref, clickProxy)
+
         textPrefClass.getMethod("setKey", String::class.java).invoke(textPref, PREFERENCE_KEY_SMART_CHARGE_VALUE_SET)
         textPrefClass.getMethod("setEnabled", Boolean::class.java).invoke(textPref, true)
 
@@ -175,6 +191,7 @@ object ProtectFragmentHook {
         textPrefClass.getMethod("setText", String::class.java).invoke(textPref, valueText)
 
         preferenceCategoryClass.getMethod("addPreference", prefBaseClass).invoke(category, textPref)
+        Log.i(TAG, "Custom preference added successfully")
     }
 
     private fun getSmartChargeValueText(context: Context, value: Int? = null): String {
