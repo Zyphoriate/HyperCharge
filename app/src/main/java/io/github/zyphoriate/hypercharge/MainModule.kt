@@ -36,6 +36,7 @@ class MainModule : XposedModule() {
                 .loadClass("androidx.preference.Preference")
             val onPreferenceClickMethod = fragmentClass.getMethod("onPreferenceClick", prefClass)
 
+            val onPreferenceChangeMethod = fragmentClass.getMethod("onPreferenceChange", prefClass, Any::class.java)
             val getPreferenceScreenMethod = fragmentClass.getMethod("getPreferenceScreen")
             val requireContextMethod = fragmentClass.getMethod("requireContext")
 
@@ -43,6 +44,7 @@ class MainModule : XposedModule() {
                 xposedInterface = this,
                 onCreatePrefsMethod = onCreatePrefsMethod,
                 onPreferenceClickMethod = onPreferenceClickMethod,
+                onPreferenceChangeMethod = onPreferenceChangeMethod,
                 getPreferenceScreenMethod = getPreferenceScreenMethod,
                 requireContextMethod = requireContextMethod,
                 packageName = param.packageName

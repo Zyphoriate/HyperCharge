@@ -14,223 +14,204 @@ object ProtectFragmentHook {
     private const val TAG = "HyperSmartCharge"
     private const val PREF_KEY_INTELLECT = "cb_intellect_charge_protect"
     private const val PREF_KEY_CATEGORY = "category_features_battery_protect"
-    private const val PREF_KEY_CUTOFF_CHECK = "cb_smart_charge_cutoff"
+    private const val PREF_KEY_CUTOFF = "cb_smart_charge_cutoff"
     private const val PREF_KEY_CUTOFF_SETTING = "pref_smart_charge_cutoff_value"
 
     private var appContext: Context? = null
-    private lateinit var xposedInterface: XposedInterface
+    private lateinit var xposed: XposedInterface
 
     fun apply(
         xposedInterface: XposedInterface,
         onCreatePrefsMethod: Method,
         onPreferenceClickMethod: Method,
+        onPreferenceChangeMethod: Method,
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
         @Suppress("UNUSED_PARAMETER") packageName: String,
     ) {
-        this.xposedInterface = xposedInterface
-        Log.i(TAG, "Hooking onCreatePreferences in $packageName")
+        xposed = xposedInterface
+        Log.i(TAG, "Hooking ...")
 
-        // Hook onCreatePreferences: add "断冲" checkbox to the battery protect category
-        xposedInterface.hook(onCreatePrefsMethod).intercept { chain ->
+        // Hook 1: onCreatePreferences — inject cutoff radio + settings button
+        xposed.hook(onCreatePrefsMethod).intercept { chain ->
             val fragment = chain.thisObject
             val result = chain.proceed()
-
             try {
                 appContext = requireContextMethod.invoke(fragment) as? Context
                 val ctx = appContext ?: return@intercept result
-
                 if (isSmartChargeAvailable(fragment)) {
-                    injectCutoffCheckbox(fragment, getPreferenceScreenMethod, requireContextMethod)
-                    if (BuildConfig.DEBUG) {
-                        Toast.makeText(ctx, "HyperSmartCharge hooked OK", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    RemoteEventHelper.sendEvent(ctx, RemoteEventHelper.Event.UnregisterBatteryReceiver)
+                    injectCutoffUI(fragment, getPreferenceScreenMethod, requireContextMethod)
+                    if (BuildConfig.DEBUG) Toast.makeText(ctx, "HyperSmartCharge OK", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "onCreatePreferences hook error", e)
+                Log.e(TAG, "inject error", e)
             }
             result
         }
 
-        // Hook onPreferenceClick: intercept clicks on our settings button
-        xposedInterface.hook(onPreferenceClickMethod).intercept { chain ->
-            val fragment = chain.thisObject
+        // Hook 2: onPreferenceChange — detect when cutoff radio is toggled
+        xposed.hook(onPreferenceChangeMethod).intercept { chain ->
             val preference = chain.args[0]
-            try {
-                val prefKey = preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String
-                if (prefKey == PREF_KEY_CUTOFF_SETTING) {
-                    val ctx = appContext ?: requireContextMethod.invoke(fragment) as? Context
-                    if (ctx != null) launchSettingsActivity(ctx)
-                    return@intercept true
+            val newValue = chain.args[1]
+            val key = try { preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String }
+                catch (_: Exception) { null }
+
+            if (key == PREF_KEY_CUTOFF) {
+                val enabled = (newValue as? Boolean) ?: false
+                Log.d(TAG, "Cutoff toggled: $enabled")
+                val ctx = appContext
+                if (ctx != null) {
+                    if (enabled) {
+                        val cur = ChargeProtectionUtils.getSmartChargePercentValue(ctx)
+                        if (cur == null) {
+                            ChargeProtectionUtils.openCommonProtectMode(70)
+                            ChargeProtectionUtils.putSmartChargePercentValue(ctx, 70)
+                        }
+                    } else {
+                        ChargeProtectionUtils.closeSmartCharge()
+                        ChargeProtectionUtils.putSmartChargePercentValue(ctx, null)
+                        RemoteEventHelper.sendEvent(ctx, RemoteEventHelper.Event.UnregisterBatteryReceiver)
+                    }
+                    // Update settings button
+                    updateSettingsButton(ctx, enabled)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "onPreferenceClick hook error", e)
+            }
+
+            chain.proceed()
+        }
+
+        // Hook 3: onPreferenceClick — launch SettingsActivity on button click
+        xposed.hook(onPreferenceClickMethod).intercept { chain ->
+            val preference = chain.args[0]
+            val key = try { preference?.javaClass?.getMethod("getKey")?.invoke(preference) as? String }
+                catch (_: Exception) { null }
+
+            if (key == PREF_KEY_CUTOFF_SETTING) {
+                launchSettingsActivity(appContext ?: return@intercept chain.proceed())
+                return@intercept true
             }
             chain.proceed()
         }
 
-        Log.i(TAG, "HyperSmartCharge hooks installed successfully")
+        Log.i(TAG, "Hooks installed")
     }
 
-    private fun injectCutoffCheckbox(
+    private fun injectCutoffUI(
         fragment: Any,
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
     ) {
         val cl = fragment.javaClass.classLoader
         val context = requireContextMethod.invoke(fragment) as Context
-
-        // Find the category to add our option
-        val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
-        val prefBaseClass = cl.loadClass("androidx.preference.Preference")
-
-        // 1. Add "断冲" SingleChoicePreference (category only accepts this type)
         val radioClass = cl.loadClass("miuix.preference.SingleChoicePreference")
+        val prefBaseClass = cl.loadClass("androidx.preference.Preference")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
+        val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
+        val hasCutoff = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
 
-        val hasCutoffSet = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
-
+        // 1. Add cutoff radio (unchecked)
         val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
-            radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
+            radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF)
             radioClass.getMethod("setTitle", CharSequence::class.java)
-                .invoke(this, getModuleString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
+                .invoke(this, modString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
+            // Ensure unchecked before adding (avoids "Already has a checked item")
+            try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(this, false) }
+            catch (_: Exception) {}
         }
-        // Add as unchecked first (always safe)
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
 
-        // Now manage selection state: if cutoff was previously enabled, select it
-        if (hasCutoffSet) {
-            try {
-                // Find checked item and uncheck it, then check ours
-                val getPreferenceCount = category.javaClass.getMethod("getPreferenceCount")
-                val getPreference = category.javaClass.getMethod("getPreference", Int::class.java)
-                val count = getPreferenceCount.invoke(category) as Int
-                for (i in 0 until count) {
-                    val pref = getPreference.invoke(category, i)
-                    val key = try {
-                        radioClass.getMethod("getKey").invoke(pref) as? String
-                    } catch (_: Exception) { null }
-                    if (key == PREF_KEY_CUTOFF_CHECK) continue
-                    try {
-                        radioClass.getMethod("setChecked", Boolean::class.java).invoke(pref, false)
-                    } catch (_: Exception) {}
-                }
-                // Now check ours
-                radioClass.getMethod("setChecked", Boolean::class.java).invoke(radioPref, true)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to select cutoff radio", e)
-            }
-        }
-
-        // 2. Add clickable setting button (shown when cutoff is enabled)
+        // 2. Add settings button below category (on PreferenceScreen)
         val settingButton = textPrefClass.getConstructor(Context::class.java).newInstance(context).apply {
-            val lm = textPrefClass.methods.find {
-                it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1
-            }
-            lm?.invoke(this, fragment)
+            textPrefClass.methods.find { it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1 }
+                ?.invoke(this, fragment)
             textPrefClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_SETTING)
             textPrefClass.getMethod("setTitle", CharSequence::class.java)
-                .invoke(this, getModuleString(context, "smart_charge_value_title", "Cutoff Value"))
-            textPrefClass.getMethod("setSummary", CharSequence::class.java)
-                .invoke(this, getModuleString(context, "smart_charge_value_summary", "Tap to set the charge limit"))
-            textPrefClass.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
-            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoffSet)
+                .invoke(this, modString(context, "smart_charge_value_title", "Cutoff Value"))
+            textPrefClass.getMethod("setText", String::class.java)
+                .invoke(this, getValueText(context))
+            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoff)
         }
-        // Add button to PreferenceScreen (not the category — it only accepts SingleChoicePreference)
-        val preferenceScreen = getPreferenceScreenMethod.invoke(fragment)
-        preferenceScreen.javaClass.getMethod("addPreference", prefBaseClass).invoke(preferenceScreen, settingButton)
+        val screen = getPreferenceScreenMethod.invoke(fragment)
+        screen.javaClass.getMethod("addPreference", prefBaseClass).invoke(screen, settingButton)
 
-        // Hook setChecked to toggle setting button + charge mode
-        xposedInterface.hook(
-            radioClass.getMethod("setChecked", Boolean::class.java)
-        ).intercept { chain ->
-            val key = try { radioClass.getMethod("getKey").invoke(chain.thisObject) as? String }
-                catch (_: Exception) { null }
-            if (key != PREF_KEY_CUTOFF_CHECK) return@intercept chain.proceed()
-
-            val newValue = chain.args[0] as Boolean
-            if (newValue) {
-                val cur = ChargeProtectionUtils.getSmartChargePercentValue(context)
-                if (cur == null) {
-                    ChargeProtectionUtils.openCommonProtectMode(70)
-                    ChargeProtectionUtils.putSmartChargePercentValue(context, 70)
-                }
-            } else {
-                ChargeProtectionUtils.closeSmartCharge()
-                ChargeProtectionUtils.putSmartChargePercentValue(context, null)
-                RemoteEventHelper.sendEvent(context, RemoteEventHelper.Event.UnregisterBatteryReceiver)
-            }
-            val result = chain.proceed()
+        // 3. If cutoff was previously enabled, select it now
+        if (hasCutoff) {
             try {
-                textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(settingButton, newValue)
-                textPrefClass.getMethod("setText", String::class.java)
-                    .invoke(settingButton, getSmartChargeValueText(context))
-            } catch (_: Exception) {}
-            result
+                val getCount = category.javaClass.getMethod("getPreferenceCount")
+                val getPref = category.javaClass.getMethod("getPreference", Int::class.java)
+                val count = getCount.invoke(category) as Int
+                for (i in 0 until count) {
+                    val p = getPref.invoke(category, i)
+                    val k = try { radioClass.getMethod("getKey").invoke(p) as? String }
+                        catch (_: Exception) { null }
+                    if (k == PREF_KEY_CUTOFF) continue
+                    try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(p, false) }
+                    catch (_: Exception) {}
+                }
+                radioClass.getMethod("setChecked", Boolean::class.java).invoke(radioPref, true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to select cutoff", e)
+            }
         }
 
-        Log.i(TAG, "Cutoff checkbox + settings button injected")
+        Log.i(TAG, "UI injected, hasCutoff=$hasCutoff")
+    }
+
+    private fun updateSettingsButton(context: Context, visible: Boolean) {
+        try {
+            val pref = findPreference(appContext, PREF_KEY_CUTOFF_SETTING)
+                ?: return
+            pref.javaClass.getMethod("setVisible", Boolean::class.java).invoke(pref, visible)
+            pref.javaClass.getMethod("setText", String::class.java)
+                .invoke(pref, getValueText(context))
+        } catch (e: Exception) {
+            Log.e(TAG, "updateSettingsButton error", e)
+        }
     }
 
     private fun launchSettingsActivity(context: Context) {
-        Log.d(TAG, "Launching SettingsActivity")
         try {
-            context.startActivity(
-                android.content.Intent().apply {
-                    setClassName(
-                        "io.github.zyphoriate.hypercharge",
-                        "io.github.zyphoriate.hypercharge.ui.SettingsActivity"
-                    )
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
+            context.startActivity(android.content.Intent().apply {
+                setClassName("io.github.zyphoriate.hypercharge", ".ui.SettingsActivity")
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch SettingsActivity", e)
-            Toast.makeText(context, "Launch failed", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "launch failed", e)
         }
     }
 
-    private fun findPreference(who: Any, key: String): Any? {
-        return try {
-            var method: Method? = null
-            var clazz: Class<*>? = who.javaClass
-            while (clazz != null && method == null) {
-                try { method = clazz.getDeclaredMethod("findPreference", String::class.java) }
-                catch (_: NoSuchMethodException) {
-                    try { method = clazz.getDeclaredMethod("findPreference", CharSequence::class.java) }
-                    catch (_: NoSuchMethodException) { clazz = clazz.superclass }
-                }
+    private fun findPreference(who: Any?, key: String): Any? {
+        if (who == null) return null
+        var clazz: Class<*>? = who.javaClass
+        while (clazz != null) {
+            try {
+                val m = clazz.getDeclaredMethod("findPreference", CharSequence::class.java)
+                return m.invoke(who, key)
+            } catch (_: NoSuchMethodException) {
+                try {
+                    val m = clazz.getDeclaredMethod("findPreference", String::class.java)
+                    return m.invoke(who, key)
+                } catch (_: NoSuchMethodException) { clazz = clazz.superclass }
             }
-            method?.invoke(who, key)
-        } catch (e: Exception) {
-            Log.e(TAG, "findPreference error on ${who.javaClass.simpleName}", e)
-            null
         }
+        return null
     }
 
     private fun isSmartChargeAvailable(fragment: Any): Boolean {
-        val category = findPreference(fragment, PREF_KEY_CATEGORY)
-        if (category == null) return false
-        val intellect = findPreference(category, PREF_KEY_INTELLECT)
-        return intellect != null
+        val cat = findPreference(fragment, PREF_KEY_CATEGORY) ?: return false
+        return findPreference(cat, PREF_KEY_INTELLECT) != null
     }
 
-    private fun getSmartChargeValueText(context: Context): String {
-        val percent = ChargeProtectionUtils.getSmartChargePercentValue(context)
-        return if (percent != null && ChargeProtectionUtils.isSmartChargePercentValueValid(percent)) {
-            "$percent%"
-        } else {
-            getModuleString(context, "smart_charge_close", "Close")
-        }
+    private fun getValueText(context: Context): String {
+        val p = ChargeProtectionUtils.getSmartChargePercentValue(context)
+        return if (p != null && ChargeProtectionUtils.isSmartChargePercentValueValid(p)) "$p%" else "Close"
     }
 
     @Suppress("DiscouragedApi")
-    private fun getModuleString(context: Context, name: String, fallback: String): String {
+    private fun modString(context: Context, name: String, fallback: String): String {
         return try {
-            val resId = context.resources.getIdentifier(name, "string", "io.github.zyphoriate.hypercharge")
-            if (resId != 0) context.resources.getString(resId) else fallback
+            val id = context.resources.getIdentifier(name, "string", "io.github.zyphoriate.hypercharge")
+            if (id != 0) context.resources.getString(id) else fallback
         } catch (_: Exception) { fallback }
     }
 }
