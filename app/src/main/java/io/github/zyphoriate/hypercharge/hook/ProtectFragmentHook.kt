@@ -162,10 +162,11 @@ object ProtectFragmentHook {
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        // Set click listener — use Preference.OnPreferenceClickListener proxy
-        val prefClickListenerClass = cl.loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
+        // Set click listener — use Preference's own ClassLoader to find inner interface
+        val prefCl = prefBaseClass.classLoader
+        val prefClickListenerClass = prefCl.loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
         val clickProxy = java.lang.reflect.Proxy.newProxyInstance(
-            cl, arrayOf(prefClickListenerClass)
+            prefCl, arrayOf(prefClickListenerClass)
         ) { _, method, args ->
             if (method.name == "onPreferenceClick" && args != null && args.size == 1) {
                 Log.d(TAG, "Preference clicked via proxy: ${args[0]}")
