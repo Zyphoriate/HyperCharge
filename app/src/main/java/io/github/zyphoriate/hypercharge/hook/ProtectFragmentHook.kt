@@ -90,16 +90,11 @@ object ProtectFragmentHook {
         val radioClass = cl.loadClass("miuix.preference.SingleChoicePreference")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
-        val hasValue = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
-
         val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
             radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
             radioClass.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
-            if (hasValue) {
-                try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(this, true) }
-                catch (_: Exception) {}
-            }
+            // Don't pre-set checked — category manages mutual exclusion
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
 
@@ -115,7 +110,7 @@ object ProtectFragmentHook {
             textPrefClass.getMethod("setSummary", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_value_summary", "Tap to set the charge limit"))
             textPrefClass.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
-            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasValue)
+            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, false)
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
 
