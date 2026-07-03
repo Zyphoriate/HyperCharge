@@ -159,6 +159,7 @@ object ProtectFragmentHook {
                 }
             } else {
                 ChargeProtectionUtils.closeSmartCharge()
+                ChargeProtectionUtils.putSmartChargePercentValue(context, null)
                 RemoteEventHelper.sendEvent(context, RemoteEventHelper.Event.UnregisterBatteryReceiver)
             }
             val result = chain.proceed()
