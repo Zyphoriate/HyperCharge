@@ -23,15 +23,18 @@ class MainModule : XposedModule() {
         val bridge = DexKitBridge.create(apkPath)
 
         try {
-            // DexKit: locate obfuscated class and hook-target methods
             val fragmentClassData = DexQueries.findChargeProtectFragment(bridge)
             val fragmentClass = fragmentClassData.getInstance(classLoader)
 
+            // DexKit: onCreatePreferences (obfuscated, defined in MIUI code)
             val onCreatePrefsMethod = DexQueries.findOnCreatePreferencesMethod(bridge)
                 .getMethodInstance(classLoader)
 
-            val onPreferenceClickMethod = DexQueries.findOnPreferenceClickMethod(bridge)
-                .getMethodInstance(classLoader)
+            // onPreferenceClick — inherited from PreferenceFragmentCompat, not obfuscated.
+            // Must use fragmentClass.classLoader to resolve the Preference parameter type.
+            val prefClass = fragmentClass.classLoader
+                .loadClass("androidx.preference.Preference")
+            val onPreferenceClickMethod = fragmentClass.getMethod("onPreferenceClick", prefClass)
 
             val getPreferenceScreenMethod = fragmentClass.getMethod("getPreferenceScreen")
             val requireContextMethod = fragmentClass.getMethod("requireContext")
