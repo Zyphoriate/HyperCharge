@@ -6,4 +6,8 @@
     <string name="smart_charge_close">关闭</string>
     <string name="smart_charge_pref_summary">在电量达到设定的值时暂停充电</string>
     <string name="smart_charge_set_note">"\n          ！！注意事项！！\n          1. 此功能为实验性设置, 仅供学习和交流使用\n          2. 确认设置后，可能会影响其它电池保护逻辑\n          3. 启用此功能后，请不要同时启用其他电池保护功能\n          4. 若需关闭此功能并恢复其它电池保护，请按以下步骤操作:\n              1) 将滑动条调至 \'关闭\' 并确认设置\n              2) 启用您希望使用的其他电池保护功能          \n        "</string>
+    <string name="smart_charge_cutoff_title">断冲</string>
+    <string name="smart_charge_cutoff_summary">在自定义电量时停止充电</string>
+    <string name="smart_charge_value_title">断冲值</string>
+    <string name="smart_charge_value_summary">点击设置充电上限</string>
 </resources>

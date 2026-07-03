@@ -7,4 +7,8 @@
     <string name="smart_charge_close">Close</string>
     <string name="smart_charge_pref_summary">The device will stop charging when battery level reaches the custom value</string>
     <string name="smart_charge_set_note">"\n          ！！Notes！！\n          1. This setting is an experimental feature.\n          2. After confirming the setting value, it may affect the logic of other battery protections.\n          3. Do not enable any other battery protection after enabling this feature.\n          4. To turn off this feature and restore other battery protection, follow these steps:\n              1) Slide the slider to \'Close\' and click OK.\n              2) Turn on the battery protection you want to enable.          \n        "</string>
+    <string name="smart_charge_cutoff_title">Charge Cutoff</string>
+    <string name="smart_charge_cutoff_summary">Stop charging at a custom battery level</string>
+    <string name="smart_charge_value_title">Cutoff Value</string>
+    <string name="smart_charge_value_summary">Tap to set the charge limit</string>
 </resources>
