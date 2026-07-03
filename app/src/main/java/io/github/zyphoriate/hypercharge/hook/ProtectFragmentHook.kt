@@ -162,12 +162,21 @@ object ProtectFragmentHook {
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        // Set the fragment as the click listener (like the original code)
-        // Fragment implements Preference.OnPreferenceClickListener, so it works
-        val setListenerMethod = textPrefClass.methods.find {
-            it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1
+        // AndroidX shared lib is loaded by the system classloader
+        val listenerClass = ClassLoader.getSystemClassLoader()
+            .loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
+        val clickProxy = java.lang.reflect.Proxy.newProxyInstance(
+            listenerClass.classLoader, arrayOf(listenerClass)
+        ) { _, method, args ->
+            if (method.name == "onPreferenceClick" && args != null && args.size == 1) {
+                Log.d(TAG, "Preference clicked via proxy: ${args[0]}")
+                showChargeValueDialog(context, textPref)
+                true
+            } else false
         }
-        setListenerMethod?.invoke(textPref, fragment)
+        textPrefClass.methods.find {
+            it.name == "setOnPreferenceClickListener" && it.parameterTypes.size == 1
+        }?.invoke(textPref, clickProxy)
 
         textPrefClass.getMethod("setKey", String::class.java).invoke(textPref, PREFERENCE_KEY_SMART_CHARGE_VALUE_SET)
         textPrefClass.getMethod("setEnabled", Boolean::class.java).invoke(textPref, true)
