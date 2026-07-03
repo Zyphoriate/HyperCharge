@@ -163,11 +163,7 @@ object ProtectFragmentHook {
         val textPref = textPrefConstructor.newInstance(context)
 
         // Set click listener — use Preference.OnPreferenceClickListener proxy
-        val prefClickListenerClass = try {
-            cl.loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
-        } catch (_: ClassNotFoundException) {
-            cl.loadClass("androidx.preference.Preference$OnPreferenceClickListener")
-        }
+        val prefClickListenerClass = cl.loadClass("androidx.preference.Preference\$OnPreferenceClickListener")
         val clickProxy = java.lang.reflect.Proxy.newProxyInstance(
             cl, arrayOf(prefClickListenerClass)
         ) { _, method, args ->
