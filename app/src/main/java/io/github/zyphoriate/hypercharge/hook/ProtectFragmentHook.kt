@@ -90,13 +90,36 @@ object ProtectFragmentHook {
         val radioClass = cl.loadClass("miuix.preference.SingleChoicePreference")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
+        val hasCutoffSet = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
+
         val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
             radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
             radioClass.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
-            // Don't pre-set checked — category manages mutual exclusion
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
+
+        // If cutoff was previously set, switch selection to our radio
+        if (hasCutoffSet) {
+            try {
+                // Uncheck the currently checked item
+                val getPreferenceCount = category.javaClass.getMethod("getPreferenceCount")
+                val getPreference = category.javaClass.getMethod("getPreference", Int::class.java)
+                val count = getPreferenceCount.invoke(category) as Int
+                for (i in 0 until count) {
+                    val pref = getPreference.invoke(category, i)
+                    val isChecked = radioClass.getMethod("isChecked").invoke(pref) as? Boolean ?: false
+                    if (isChecked) {
+                        radioClass.getMethod("setChecked", Boolean::class.java).invoke(pref, false)
+                        break
+                    }
+                }
+                // Check our radio
+                radioClass.getMethod("setChecked", Boolean::class.java).invoke(radioPref, true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to switch selection to cutoff radio", e)
+            }
+        }
 
         // 2. Add clickable setting button (shown when cutoff is enabled)
         val settingButton = textPrefClass.getConstructor(Context::class.java).newInstance(context).apply {
@@ -110,7 +133,7 @@ object ProtectFragmentHook {
             textPrefClass.getMethod("setSummary", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_value_summary", "Tap to set the charge limit"))
             textPrefClass.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
-            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, false)
+            textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoffSet)
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
 
