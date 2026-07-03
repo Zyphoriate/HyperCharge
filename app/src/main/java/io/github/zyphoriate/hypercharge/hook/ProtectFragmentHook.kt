@@ -22,14 +22,18 @@ object ProtectFragmentHook {
 
     private var appContext: Context? = null
 
+    private var hostClassLoader: ClassLoader? = null
+
     fun apply(
         xposedInterface: XposedInterface,
         onCreatePrefsMethod: Method,
         onPreferenceClickMethod: Method,
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
+        hostClassLoader: ClassLoader,
         @Suppress("UNUSED_PARAMETER") packageName: String,
     ) {
+        this.hostClassLoader = hostClassLoader
         Log.i(TAG, "Hooking onCreatePreferences in $packageName")
 
         xposedInterface.hook(onCreatePrefsMethod).intercept { chain ->
@@ -146,38 +150,35 @@ object ProtectFragmentHook {
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
     ) {
+        val cl = hostClassLoader ?: return
         val context = requireContextMethod.invoke(fragment) as Context
         val preferenceScreen = getPreferenceScreenMethod.invoke(fragment)
 
-        val preferenceCategoryClass = Class.forName("miuix.preference.PreferenceCategory")
+        val preferenceCategoryClass = cl.loadClass("miuix.preference.PreferenceCategory")
         val catConstructor = preferenceCategoryClass.getConstructor(Context::class.java, android.util.AttributeSet::class.java)
         val category = catConstructor.newInstance(context, null)
 
-        preferenceScreen.javaClass.getMethod("addPreference", Class.forName("androidx.preference.Preference"))
+        val prefBaseClass = cl.loadClass("androidx.preference.Preference")
+        preferenceScreen.javaClass.getMethod("addPreference", prefBaseClass)
             .invoke(preferenceScreen, category)
 
-        val textPrefClass = Class.forName("miuix.preference.TextPreference")
+        val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        textPrefClass.getMethod("setOnPreferenceClickListener", Class.forName("androidx.preference.Preference.OnPreferenceClickListener"))
-            .invoke(textPref, fragment)
-        textPrefClass.getMethod("setKey", String::class.java)
-            .invoke(textPref, PREFERENCE_KEY_SMART_CHARGE_VALUE_SET)
-        textPrefClass.getMethod("setEnabled", Boolean::class.java)
-            .invoke(textPref, true)
+        val listenerClass = cl.loadClass("androidx.preference.Preference.OnPreferenceClickListener")
+        textPrefClass.getMethod("setOnPreferenceClickListener", listenerClass).invoke(textPref, fragment)
+        textPrefClass.getMethod("setKey", String::class.java).invoke(textPref, PREFERENCE_KEY_SMART_CHARGE_VALUE_SET)
+        textPrefClass.getMethod("setEnabled", Boolean::class.java).invoke(textPref, true)
 
         val title = getModuleString(context, "app_name", "HyperSmartCharge")
         textPrefClass.getMethod("setTitle", CharSequence::class.java).invoke(textPref, title)
-
         val summary = getModuleString(context, "smart_charge_pref_summary", "")
         textPrefClass.getMethod("setSummary", CharSequence::class.java).invoke(textPref, summary)
-
         val valueText = getSmartChargeValueText(context)
         textPrefClass.getMethod("setText", String::class.java).invoke(textPref, valueText)
 
-        preferenceCategoryClass.getMethod("addPreference", Class.forName("androidx.preference.Preference"))
-            .invoke(category, textPref)
+        preferenceCategoryClass.getMethod("addPreference", prefBaseClass).invoke(category, textPref)
     }
 
     private fun getSmartChargeValueText(context: Context, value: Int? = null): String {
