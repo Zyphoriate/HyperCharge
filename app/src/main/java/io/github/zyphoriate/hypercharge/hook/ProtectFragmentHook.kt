@@ -162,10 +162,8 @@ object ProtectFragmentHook {
             .show()
     }
 
-    private companion object {
-        const val MIN_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE
-        const val MAX_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MAX_CHARGE_PERCENT_VALUE
-    }
+    private val MIN_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE
+    private val MAX_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MAX_CHARGE_PERCENT_VALUE
 
     private fun addSmartChargePreference(
         fragment: Any,
