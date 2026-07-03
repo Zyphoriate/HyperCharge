@@ -3,12 +3,13 @@ package io.github.zyphoriate.hypercharge.hook
 import android.app.AlertDialog
 import android.content.Context
 import android.util.Log
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
-import androidx.compose.ui.platform.ComposeView
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedInterface.Hooker
 import io.github.zyphoriate.hypercharge.BuildConfig
-import io.github.zyphoriate.hypercharge.ui.ChargeValueDialogContent
 import io.github.zyphoriate.hypercharge.utils.ChargeProtectionUtils
 import io.github.zyphoriate.hypercharge.utils.RemoteEventHelper
 import java.lang.reflect.Method
@@ -89,56 +90,81 @@ object ProtectFragmentHook {
     }
 
     private fun showChargeValueDialog(context: Context, preference: Any) {
-        val composeView = ComposeView(context)
         Log.d(TAG, "Creating charge value dialog")
 
-        val dialog = AlertDialog.Builder(context)
-            .setTitle("HyperSmartCharge")
-            .setView(composeView)
-            .setNegativeButton(android.R.string.cancel) { d, _ -> d.dismiss() }
-            .create()
-
-        composeView.setContent {
-            ChargeValueDialogContent(
-                context = context,
-                onConfirm = { value ->
-                    val success: Boolean
-                    val percentValue: Int?
-                    if (value != null) {
-                        success = ChargeProtectionUtils.openCommonProtectMode(value)
-                        percentValue = value
-                    } else {
-                        success = ChargeProtectionUtils.closeSmartCharge()
-                        percentValue = null
-                    }
-
-                    ChargeProtectionUtils.putSmartChargePercentValue(context, percentValue)
-
-                    try {
-                        val text = getSmartChargeValueText(context, percentValue)
-                        preference.javaClass.getMethod("setText", String::class.java)
-                            .invoke(preference, text)
-                    } catch (_: Exception) {}
-
-                    val notifValue = if (success) percentValue?.toString() else null
-                    RemoteEventHelper.sendEvent(
-                        context,
-                        RemoteEventHelper.Event.UpdateNotification(notifValue)
-                    )
-
-                    val msg = if (success) {
-                        if (percentValue != null) "$percentValue%" else "Closed"
-                    } else "Failed"
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                    Log.i(TAG, "Charge value set: $msg")
-
-                    dialog.dismiss()
-                },
-                onCancel = { dialog.dismiss() }
-            )
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 24)
         }
 
-        dialog.show()
+        val valueText = TextView(context).apply {
+            textSize = 20f
+            text = getSmartChargeValueText(context)
+        }
+        layout.addView(valueText)
+
+        val seekBar = SeekBar(context).apply {
+            max = MAX_CHARGE_PERCENT_VALUE - MIN_CHARGE_PERCENT_VALUE
+            val existing = ChargeProtectionUtils.getSmartChargePercentValue(context)
+            progress = if (existing != null && existing >= MIN_CHARGE_PERCENT_VALUE) {
+                existing - MIN_CHARGE_PERCENT_VALUE
+            } else 0
+
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val pv = progress + MIN_CHARGE_PERCENT_VALUE
+                    valueText.text = if (progress == 0) "Close" else "$pv%"
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+        }
+        layout.addView(seekBar)
+
+        AlertDialog.Builder(context)
+            .setTitle("HyperSmartCharge")
+            .setView(layout)
+            .setNegativeButton(android.R.string.cancel) { d, _ -> d.dismiss() }
+            .setPositiveButton(android.R.string.ok) { d, _ ->
+                val progress = seekBar.progress
+                val percentValue = if (progress == 0) null
+                else progress + MIN_CHARGE_PERCENT_VALUE
+
+                val success = if (percentValue != null) {
+                    ChargeProtectionUtils.openCommonProtectMode(percentValue)
+                } else {
+                    ChargeProtectionUtils.closeSmartCharge()
+                }
+
+                ChargeProtectionUtils.putSmartChargePercentValue(context, percentValue)
+
+                try {
+                    val text = getSmartChargeValueText(context, percentValue)
+                    preference.javaClass.getMethod("setText", String::class.java)
+                        .invoke(preference, text)
+                } catch (_: Exception) {}
+
+                val notifValue = if (success) percentValue?.toString() else null
+                RemoteEventHelper.sendEvent(
+                    context,
+                    RemoteEventHelper.Event.UpdateNotification(notifValue)
+                )
+
+                val msg = if (success) {
+                    if (percentValue != null) "$percentValue%" else "Closed"
+                } else "Failed"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "Charge value set: $msg")
+
+                d.dismiss()
+            }
+            .create()
+            .show()
+    }
+
+    private companion object {
+        const val MIN_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MIN_CHARGE_PERCENT_VALUE
+        const val MAX_CHARGE_PERCENT_VALUE = ChargeProtectionUtils.MAX_CHARGE_PERCENT_VALUE
     }
 
     private fun addSmartChargePreference(
