@@ -162,8 +162,8 @@ object ProtectFragmentHook {
         val textPrefConstructor = textPrefClass.getConstructor(Context::class.java)
         val textPref = textPrefConstructor.newInstance(context)
 
-        val listenerClass = cl.loadClass("androidx.preference.Preference.OnPreferenceClickListener")
-        textPrefClass.getMethod("setOnPreferenceClickListener", listenerClass).invoke(textPref, fragment)
+        val setListenerMethod = textPrefClass.methods.first { it.name == "setOnPreferenceClickListener" }
+        setListenerMethod.invoke(textPref, fragment)
         textPrefClass.getMethod("setKey", String::class.java).invoke(textPref, PREFERENCE_KEY_SMART_CHARGE_VALUE_SET)
         textPrefClass.getMethod("setEnabled", Boolean::class.java).invoke(textPref, true)
 
