@@ -42,7 +42,6 @@ class MainModule : XposedModule() {
                 onPreferenceClickMethod = onPreferenceClickMethod,
                 getPreferenceScreenMethod = getPreferenceScreenMethod,
                 requireContextMethod = requireContextMethod,
-                hostClassLoader = classLoader,
                 packageName = param.packageName
             )
         } catch (e: Exception) {

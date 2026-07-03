@@ -22,18 +22,14 @@ object ProtectFragmentHook {
 
     private var appContext: Context? = null
 
-    private var hostClassLoader: ClassLoader? = null
-
     fun apply(
         xposedInterface: XposedInterface,
         onCreatePrefsMethod: Method,
         onPreferenceClickMethod: Method,
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
-        hostClassLoader: ClassLoader,
         @Suppress("UNUSED_PARAMETER") packageName: String,
     ) {
-        this.hostClassLoader = hostClassLoader
         Log.i(TAG, "Hooking onCreatePreferences in $packageName")
 
         xposedInterface.hook(onCreatePrefsMethod).intercept { chain ->
@@ -150,7 +146,7 @@ object ProtectFragmentHook {
         getPreferenceScreenMethod: Method,
         requireContextMethod: Method,
     ) {
-        val cl = hostClassLoader ?: return
+        val cl = fragment.javaClass.classLoader // Fragment's CL can resolve all AndroidX/miuix deps
         val context = requireContextMethod.invoke(fragment) as Context
         val preferenceScreen = getPreferenceScreenMethod.invoke(fragment)
 
