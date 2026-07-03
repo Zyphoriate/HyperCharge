@@ -109,14 +109,28 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
         val hasCutoff = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
 
-        // 1. Add cutoff radio (unchecked)
+        // 1. Hook addPreference to bypass SingleChoicePreferenceCategory's check for our radio
+        val addPrefMethod = category.javaClass.getMethod("addPreference", prefBaseClass)
+        xposed.hook(addPrefMethod).intercept { chain ->
+            val pref = chain.args[0]
+            val key = try { pref.javaClass.getMethod("getKey").invoke(pref) as? String }
+                catch (_: Exception) { null }
+            if (key == PREF_KEY_CUTOFF) {
+                // Call super.addPreference (PreferenceGroup) — skip category's check
+                val superAdd = category.javaClass.superclass
+                    .getDeclaredMethod("addPreference", prefBaseClass)
+                superAdd.isAccessible = true
+                superAdd.invoke(chain.thisObject, pref)
+                return@intercept null
+            }
+            chain.proceed()
+        }
+
+        // Create and add cutoff radio
         val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
             radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF)
             radioClass.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, modString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
-            // Ensure unchecked before adding (avoids "Already has a checked item")
-            try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(this, false) }
-            catch (_: Exception) {}
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
 
