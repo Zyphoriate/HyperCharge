@@ -86,12 +86,8 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
         val prefBaseClass = cl.loadClass("androidx.preference.Preference")
 
-        // 1. Add "断冲" RadioButtonPreference to the SingleChoicePreferenceCategory
-        val radioClass: Class<*> = try {
-            cl.loadClass("miuix.preference.RadioButtonPreference")
-        } catch (_: ClassNotFoundException) {
-            cl.loadClass("androidx.preference.SingleChoicePreference")
-        }
+        // 1. Add "断冲" SingleChoicePreference (category only accepts this type)
+        val radioClass = cl.loadClass("miuix.preference.SingleChoicePreference")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
         val hasValue = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
