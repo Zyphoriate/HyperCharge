@@ -135,7 +135,9 @@ object ProtectFragmentHook {
             textPrefClass.getMethod("setText", String::class.java).invoke(this, getSmartChargeValueText(context))
             textPrefClass.getMethod("setVisible", Boolean::class.java).invoke(this, hasCutoffSet)
         }
-        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
+        // Add button to PreferenceScreen (not the category — it only accepts SingleChoicePreference)
+        val preferenceScreen = getPreferenceScreenMethod.invoke(fragment)
+        preferenceScreen.javaClass.getMethod("addPreference", prefBaseClass).invoke(preferenceScreen, settingButton)
 
         // Hook setChecked to toggle setting button + charge mode
         xposedInterface.hook(
