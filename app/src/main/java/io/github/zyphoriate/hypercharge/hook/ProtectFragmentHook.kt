@@ -86,8 +86,11 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
         val prefBaseClass = cl.loadClass("androidx.preference.Preference")
 
-        // 1. Add "断冲" SingleChoicePreference (category only accepts this type)
-        val radioClass = cl.loadClass("miuix.preference.SingleChoicePreference")
+        // 1. Add "断冲" — use the same class as the existing preferences
+        // Find an existing preference to get its actual runtime class
+        val existingPref = findPreference(category, PREF_KEY_INTELLECT)
+        val radioClass = existingPref!!.javaClass  // Must exist (we already checked)
+        Log.d(TAG, "Existing preference class: ${radioClass.name}")
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
         val hasCutoffSet = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
