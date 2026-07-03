@@ -92,32 +92,37 @@ object ProtectFragmentHook {
 
         val hasCutoffSet = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
 
-        // Uncheck any currently-checked item before adding ours
-        try {
-            val getPreferenceCount = category.javaClass.getMethod("getPreferenceCount")
-            val getPreference = category.javaClass.getMethod("getPreference", Int::class.java)
-            val count = getPreferenceCount.invoke(category) as Int
-            for (i in 0 until count) {
-                val pref = getPreference.invoke(category, i)
-                try {
-                    val isChecked = radioClass.getMethod("isChecked").invoke(pref) as? Boolean ?: false
-                    if (isChecked) {
-                        radioClass.getMethod("setChecked", Boolean::class.java).invoke(pref, false)
-                    }
-                } catch (_: Exception) {}
-            }
-        } catch (_: Exception) {}
-
         val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
             radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
             radioClass.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
-            if (hasCutoffSet) {
-                try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(this, true) }
-                catch (_: Exception) {}
+        }
+        // Add as unchecked first (always safe)
+        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
+
+        // Now manage selection state: if cutoff was previously enabled, select it
+        if (hasCutoffSet) {
+            try {
+                // Find checked item and uncheck it, then check ours
+                val getPreferenceCount = category.javaClass.getMethod("getPreferenceCount")
+                val getPreference = category.javaClass.getMethod("getPreference", Int::class.java)
+                val count = getPreferenceCount.invoke(category) as Int
+                for (i in 0 until count) {
+                    val pref = getPreference.invoke(category, i)
+                    val key = try {
+                        radioClass.getMethod("getKey").invoke(pref) as? String
+                    } catch (_: Exception) { null }
+                    if (key == PREF_KEY_CUTOFF_CHECK) continue
+                    try {
+                        radioClass.getMethod("setChecked", Boolean::class.java).invoke(pref, false)
+                    } catch (_: Exception) {}
+                }
+                // Now check ours
+                radioClass.getMethod("setChecked", Boolean::class.java).invoke(radioPref, true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to select cutoff radio", e)
             }
         }
-        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
 
         // 2. Add clickable setting button (shown when cutoff is enabled)
         val settingButton = textPrefClass.getConstructor(Context::class.java).newInstance(context).apply {
