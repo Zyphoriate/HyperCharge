@@ -86,21 +86,26 @@ object ProtectFragmentHook {
         val category = findPreference(fragment, PREF_KEY_CATEGORY) ?: return
         val prefBaseClass = cl.loadClass("androidx.preference.Preference")
 
-        // 1. Add "断冲" CheckBoxPreference
-        val checkBoxClass = cl.loadClass("miuix.preference.CheckBoxPreference")
+        // 1. Add "断冲" RadioButtonPreference to the SingleChoicePreferenceCategory
+        val radioClass: Class<*> = try {
+            cl.loadClass("miuix.preference.RadioButtonPreference")
+        } catch (_: ClassNotFoundException) {
+            cl.loadClass("androidx.preference.SingleChoicePreference")
+        }
         val textPrefClass = cl.loadClass("miuix.preference.TextPreference")
 
         val hasValue = ChargeProtectionUtils.getSmartChargePercentValue(context) != null
 
-        val checkBox = checkBoxClass.getConstructor(Context::class.java).newInstance(context).apply {
-            checkBoxClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
-            checkBoxClass.getMethod("setTitle", CharSequence::class.java)
+        val radioPref = radioClass.getConstructor(Context::class.java).newInstance(context).apply {
+            radioClass.getMethod("setKey", String::class.java).invoke(this, PREF_KEY_CUTOFF_CHECK)
+            radioClass.getMethod("setTitle", CharSequence::class.java)
                 .invoke(this, getModuleString(context, "smart_charge_cutoff_title", "Charge Cutoff"))
-            checkBoxClass.getMethod("setSummary", CharSequence::class.java)
-                .invoke(this, getModuleString(context, "smart_charge_cutoff_summary", "Stop charging at a custom battery level"))
-            checkBoxClass.getMethod("setChecked", Boolean::class.java).invoke(this, hasValue)
+            if (hasValue) {
+                try { radioClass.getMethod("setChecked", Boolean::class.java).invoke(this, true) }
+                catch (_: Exception) {}
+            }
         }
-        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, checkBox)
+        category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, radioPref)
 
         // 2. Add clickable setting button (shown when cutoff is enabled)
         val settingButton = textPrefClass.getConstructor(Context::class.java).newInstance(context).apply {
@@ -118,11 +123,11 @@ object ProtectFragmentHook {
         }
         category.javaClass.getMethod("addPreference", prefBaseClass).invoke(category, settingButton)
 
-        // Hook setChecked to toggle setting button visibility
+        // Hook setChecked to toggle setting button + charge mode
         xposedInterface.hook(
-            checkBoxClass.getMethod("setChecked", Boolean::class.java)
+            radioClass.getMethod("setChecked", Boolean::class.java)
         ).intercept { chain ->
-            val key = try { checkBoxClass.getMethod("getKey").invoke(chain.thisObject) as? String }
+            val key = try { radioClass.getMethod("getKey").invoke(chain.thisObject) as? String }
                 catch (_: Exception) { null }
             if (key != PREF_KEY_CUTOFF_CHECK) return@intercept chain.proceed()
 
@@ -133,6 +138,9 @@ object ProtectFragmentHook {
                     ChargeProtectionUtils.openCommonProtectMode(70)
                     ChargeProtectionUtils.putSmartChargePercentValue(context, 70)
                 }
+            } else {
+                ChargeProtectionUtils.closeSmartCharge()
+                RemoteEventHelper.sendEvent(context, RemoteEventHelper.Event.UnregisterBatteryReceiver)
             }
             val result = chain.proceed()
             try {
